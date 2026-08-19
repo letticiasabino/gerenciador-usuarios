@@ -1,0 +1,21 @@
+{
+  "name": "gerenciamento-usuarios",
+  "version": "1.0.0",
+  "description": "Aplicação web Full Stack para cadastro e gerenciamento de usuários - Projeto Individual DFS-2026.2",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "setup": "npm run setup --prefix backend",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "test": "npm run test --prefix backend && npm run test --prefix frontend",
+    "seed": "npm run seed --prefix backend",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend",
+    "format": "npm run format --prefix backend && npm run format --prefix frontend"
+  },
+  "author": "Lettícia Sabino",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
