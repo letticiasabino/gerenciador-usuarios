@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, Lock, Mail, LogIn, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import { loginSchema, LoginFormData } from "../schemas/auth.schema";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/auth-context";
 
 export function Login() {
   const navigate = useNavigate();

@@ -127,10 +127,14 @@ export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  date: string;
-  read: boolean;
   type: "info" | "warning" | "success";
-  link?: string;
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  isRead: boolean;
+  readAt?: string | null;
+  adminId: string;
+  activityId?: string | null;
+  link?: string | null;
+  createdAt: string;
 }
 
 export interface AuditLog {

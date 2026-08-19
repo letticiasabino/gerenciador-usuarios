@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
 
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/auth-context";
 
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";

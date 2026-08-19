@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Bell, Calendar, Check, CheckCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -12,102 +12,49 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { activityService } from "@/services/api";
-import type { Activity, AppNotification } from "@/types";
-
-const READ_NOTIFICATIONS_KEY = "gerenciador-usuarios:read_notifications";
-
-function getReadIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(READ_NOTIFICATIONS_KEY);
-    if (raw) return new Set(JSON.parse(raw));
-  } catch {
-    // ignore
-  }
-  return new Set();
-}
-
-function saveReadIds(set: Set<string>) {
-  localStorage.setItem(
-    READ_NOTIFICATIONS_KEY,
-    JSON.stringify(Array.from(set)),
-  );
-}
+import { notificationService } from "@/services/api";
+import type { AppNotification } from "@/types";
 
 export function NotificationsMenu() {
   const navigate = useNavigate();
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    activityService
-      .findAll()
-      .then((data) => setActivities(data))
-      .catch(() => {});
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await notificationService.findAll();
+      setNotifications(res.data);
+      setUnreadCount(res.unreadCount);
+    } catch {
+      // Falha silenciosa
+    }
   }, []);
 
-  const notifications: AppNotification[] = useMemo(() => {
-    const list: AppNotification[] = [];
-    const todayStr = new Date().toISOString().split("T")[0];
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
-    const todayActivities = activities.filter((a) => a.date === todayStr);
-    if (todayActivities.length > 0) {
-      list.push({
-        id: `today-${todayStr}`,
-        title: `Você tem ${todayActivities.length} atividade(s) hoje`,
-        message: todayActivities.map((a) => `${a.startTime} - ${a.title}`).join(", "),
-        date: todayStr,
-        read: readIds.has(`today-${todayStr}`),
-        type: "warning",
-        link: "/calendario",
-      });
+  const handleMarkAsRead = async (id: string, link?: string | null) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      if (link) navigate(link);
+    } catch {
+      // ignore
     }
-
-    const highPriority = activities.filter(
-      (a) => a.priority === "HIGH" && a.status === "PENDING",
-    );
-    for (const act of highPriority.slice(0, 3)) {
-      const id = `high-${act.id}`;
-      list.push({
-        id,
-        title: `Alta prioridade: ${act.title}`,
-        message: `Agendada para ${act.date} às ${act.startTime}`,
-        date: act.date,
-        read: readIds.has(id),
-        type: "warning",
-        link: "/calendario",
-      });
-    }
-
-    if (list.length === 0) {
-      list.push({
-        id: "welcome-system",
-        title: "Tudo em dia!",
-        message: "Nenhuma pendência crítica encontrada no sistema.",
-        date: todayStr,
-        read: readIds.has("welcome-system"),
-        type: "success",
-      });
-    }
-
-    return list;
-  }, [activities, readIds]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const markAsRead = (id: string) => {
-    setReadIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      saveReadIds(next);
-      return next;
-    });
   };
 
-  const markAllAsRead = () => {
-    const allIds = new Set(notifications.map((n) => n.id));
-    setReadIds(allIds);
-    saveReadIds(allIds);
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -131,7 +78,7 @@ export function NotificationsMenu() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-80 p-0 sm:w-96">
-        <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-center justify-between border-b px-4 py-3 dark:border-dark-800">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Notificações
@@ -147,7 +94,7 @@ export function NotificationsMenu() {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={markAllAsRead}
+              onClick={handleMarkAllAsRead}
               className="h-7 text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400"
             >
               <CheckCheck className="mr-1 h-3.5 w-3.5" />
@@ -156,49 +103,52 @@ export function NotificationsMenu() {
           )}
         </div>
 
-        <div className="max-h-80 divide-y overflow-y-auto">
-          {notifications.map((item) => (
-            <DropdownMenuItem
-              key={item.id}
-              onClick={() => {
-                markAsRead(item.id);
-                if (item.link) navigate(item.link);
-              }}
-              className={cn(
-                "flex cursor-pointer items-start gap-3 p-3.5 transition-colors focus:bg-slate-50 dark:focus:bg-dark-800",
-                !item.read && "bg-brand-50/40 dark:bg-brand-500/10",
-              )}
-            >
-              <span
+        <div className="max-h-80 divide-y overflow-y-auto dark:divide-dark-800">
+          {notifications.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+              Tudo em dia! Nenhuma pendência encontrada.
+            </div>
+          ) : (
+            notifications.map((item) => (
+              <DropdownMenuItem
+                key={item.id}
+                onClick={() => handleMarkAsRead(item.id, item.link)}
                 className={cn(
-                  "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                  item.type === "warning"
-                    ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                    : "bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400",
+                  "flex cursor-pointer items-start gap-3 p-3.5 transition-colors focus:bg-slate-50 dark:focus:bg-dark-800",
+                  !item.isRead && "bg-brand-50/40 dark:bg-brand-500/10",
                 )}
               >
-                {item.link ? (
-                  <Calendar className="h-3.5 w-3.5" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-              </span>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    {item.title}
-                  </p>
-                  {!item.read && (
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" />
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                    item.type === "warning"
+                      ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
+                      : "bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400",
                   )}
+                >
+                  {item.link ? (
+                    <Calendar className="h-3.5 w-3.5" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
+                      {item.title}
+                    </p>
+                    {!item.isRead && (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" />
+                    )}
+                  </div>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                    {item.message}
+                  </p>
                 </div>
-                <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                  {item.message}
-                </p>
-              </div>
-            </DropdownMenuItem>
-          ))}
+              </DropdownMenuItem>
+            ))
+          )}
         </div>
 
         <DropdownMenuSeparator />

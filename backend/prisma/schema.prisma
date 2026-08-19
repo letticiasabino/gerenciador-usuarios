@@ -66,3 +66,19 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
+model Notification {
+  id         String    @id @default(uuid())
+  title      String
+  message    String
+  type       String    @default("info")
+  priority   String    @default("MEDIUM")
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  adminId    String
+  activityId String?
+  link       String?
+  createdAt  DateTime  @default(now())
+
+  @@map("notifications")
+}

@@ -11,6 +11,7 @@ import {
   UpdateActivityInput,
   UpdateProfileInput,
   AuditLog,
+  AppNotification,
 } from "../types";
 
 export const TOKEN_KEY = "gerenciamento_token";
@@ -157,6 +158,27 @@ export const logService = {
   }): Promise<PaginatedResponse<AuditLog>> {
     const response = await api.get("/logs", { params });
     return response.data;
+  },
+};
+
+export const notificationService = {
+  async findAll(): Promise<{ data: AppNotification[]; unreadCount: number }> {
+    const response = await api.get("/notifications");
+    return response.data;
+  },
+
+  async markAsRead(id: string): Promise<AppNotification> {
+    const response = await api.patch(`/notifications/${id}/read`);
+    return response.data;
+  },
+
+  async markAllAsRead(): Promise<{ message: string }> {
+    const response = await api.patch("/notifications/read-all");
+    return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/notifications/${id}`);
   },
 };
 
