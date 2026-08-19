@@ -7,6 +7,7 @@ import {
 } from "../schemas/user.schema";
 import { config } from "../config/env";
 import { AppError } from "../utils/AppError";
+import { LogService } from "./log.service";
 
 const USER_SELECT = {
   id: true,
@@ -41,7 +42,7 @@ export class UserService {
       config.bcryptSaltRounds,
     );
 
-    return prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         ...data,
         email: data.email.toLowerCase(),
@@ -49,6 +50,15 @@ export class UserService {
       },
       select: USER_SELECT,
     });
+
+    await LogService.create({
+      action: "USER_CREATED",
+      entity: "User",
+      entityId: user.id,
+      description: `Criou o usuário ${user.fullName} (${user.email})`,
+    });
+
+    return user;
   }
 
   async findAll(query: QueryUsersInput) {
@@ -129,11 +139,20 @@ export class UserService {
       delete updateData.password;
     }
 
-    return prisma.user.update({
+    const user = await prisma.user.update({
       where: { id },
       data: updateData as UpdateUserInput,
       select: USER_SELECT,
     });
+
+    await LogService.create({
+      action: "USER_UPDATED",
+      entity: "User",
+      entityId: user.id,
+      description: `Atualizou o perfil de ${user.fullName}`,
+    });
+
+    return user;
   }
 
   async updateStatus(id: string, status: string) {
@@ -142,11 +161,20 @@ export class UserService {
       throw new AppError("Usuário não encontrado", 404);
     }
 
-    return prisma.user.update({
+    const user = await prisma.user.update({
       where: { id },
       data: { status },
       select: USER_SELECT,
     });
+
+    await LogService.create({
+      action: "USER_STATUS_CHANGED",
+      entity: "User",
+      entityId: user.id,
+      description: `Alterou o status de ${user.fullName} para ${status === "ACTIVE" ? "Ativo" : "Inativo"}`,
+    });
+
+    return user;
   }
 
   async delete(id: string) {
@@ -156,6 +184,13 @@ export class UserService {
     }
 
     await prisma.user.delete({ where: { id } });
+
+    await LogService.create({
+      action: "USER_DELETED",
+      entity: "User",
+      entityId: id,
+      description: `Removeu o usuário ${existingUser.fullName} (${existingUser.email})`,
+    });
   }
 
   async getStats() {
@@ -203,4 +238,3 @@ export class UserService {
     };
   }
 }
-

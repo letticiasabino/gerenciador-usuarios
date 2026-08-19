@@ -53,3 +53,16 @@ model Activity {
 
   @@map("activities")
 }
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  entity      String
+  entityId    String?
+  description String
+  actor       String   @default("Admin")
+  adminId     String?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}

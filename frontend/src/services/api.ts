@@ -10,6 +10,7 @@ import {
   CreateActivityInput,
   UpdateActivityInput,
   UpdateProfileInput,
+  AuditLog,
 } from "../types";
 
 export const TOKEN_KEY = "gerenciamento_token";
@@ -144,6 +145,18 @@ export const activityService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/activities/${id}`);
+  },
+};
+
+export const logService = {
+  async findAll(params?: {
+    action?: string;
+    entity?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<AuditLog>> {
+    const response = await api.get("/logs", { params });
+    return response.data;
   },
 };
 

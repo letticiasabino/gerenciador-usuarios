@@ -1,5 +1,6 @@
 import prisma from "../config/database";
 import { AppError } from "../utils/AppError";
+import { LogService } from "./log.service";
 
 interface CreateActivityDto {
   title: string;
@@ -29,7 +30,7 @@ interface QueryActivitiesDto {
 
 export class ActivityService {
   async create(data: CreateActivityDto) {
-    return prisma.activity.create({
+    const activity = await prisma.activity.create({
       data: {
         title: data.title,
         description: data.description ?? null,
@@ -40,6 +41,15 @@ export class ActivityService {
         priority: data.priority ?? "MEDIUM",
       },
     });
+
+    await LogService.create({
+      action: "ACTIVITY_CREATED",
+      entity: "Activity",
+      entityId: activity.id,
+      description: `Criou a atividade "${activity.title}" para ${activity.date}`,
+    });
+
+    return activity;
   }
 
   async findAll(query: QueryActivitiesDto) {
@@ -78,26 +88,51 @@ export class ActivityService {
   async update(id: string, data: UpdateActivityDto) {
     await this.findById(id);
 
-    return prisma.activity.update({
+    const activity = await prisma.activity.update({
       where: { id },
       data,
     });
+
+    await LogService.create({
+      action: "ACTIVITY_UPDATED",
+      entity: "Activity",
+      entityId: activity.id,
+      description: `Atualizou a atividade "${activity.title}"`,
+    });
+
+    return activity;
   }
 
   async updateStatus(id: string, status: string) {
     await this.findById(id);
 
-    return prisma.activity.update({
+    const activity = await prisma.activity.update({
       where: { id },
       data: { status },
     });
+
+    await LogService.create({
+      action: "ACTIVITY_STATUS_CHANGED",
+      entity: "Activity",
+      entityId: activity.id,
+      description: `Alterou status da atividade "${activity.title}" para ${status === "COMPLETED" ? "Concluída" : "Pendente"}`,
+    });
+
+    return activity;
   }
 
   async delete(id: string) {
-    await this.findById(id);
+    const activity = await this.findById(id);
 
     await prisma.activity.delete({
       where: { id },
+    });
+
+    await LogService.create({
+      action: "ACTIVITY_DELETED",
+      entity: "Activity",
+      entityId: id,
+      description: `Removeu a atividade "${activity.title}"`,
     });
   }
 }

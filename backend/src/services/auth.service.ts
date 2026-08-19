@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import prisma from "../config/database";
 import { config } from "../config/env";
 import { AppError } from "../utils/AppError";
+import { LogService } from "./log.service";
 
 interface Admin {
   id: string;
@@ -36,6 +37,15 @@ export class AuthService {
     }
 
     const token = generateToken(admin.id);
+
+    await LogService.create({
+      action: "LOGIN",
+      entity: "Admin",
+      entityId: admin.id,
+      description: `Entrou na plataforma`,
+      actor: admin.name,
+      adminId: admin.id,
+    });
 
     return {
       token,
@@ -99,6 +109,28 @@ export class AuthService {
       where: { id: adminId },
       data: updateData,
     });
+
+    if (data.newPassword) {
+      await LogService.create({
+        action: "PASSWORD_CHANGED",
+        entity: "Admin",
+        entityId: adminId,
+        description: "Alterou a senha de acesso da conta",
+        actor: updated.name,
+        adminId,
+      });
+    }
+
+    if (data.name || (data.email && data.email !== admin.email)) {
+      await LogService.create({
+        action: "PROFILE_UPDATED",
+        entity: "Admin",
+        entityId: adminId,
+        description: `Atualizou os dados do perfil de administrador`,
+        actor: updated.name,
+        adminId,
+      });
+    }
 
     return sanitizeAdmin(updated);
   }

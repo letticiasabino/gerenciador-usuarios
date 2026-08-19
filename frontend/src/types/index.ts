@@ -132,3 +132,14 @@ export interface AppNotification {
   type: "info" | "warning" | "success";
   link?: string;
 }
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  description: string;
+  actor: string;
+  adminId?: string | null;
+  createdAt: string;
+}

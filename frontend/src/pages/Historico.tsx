@@ -1,159 +1,167 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  CalendarDays,
   FileClock,
+  KeyRound,
   LogIn,
+  RefreshCw,
   ShieldCheck,
   Trash2,
+  UserCheck,
   UserPlus,
   UserRoundCog,
   Users as UsersIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import toast from "react-hot-toast";
 
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { logService } from "@/services/api";
+import type { AuditLog } from "@/types";
+import { formatDateTime, formatRelativeTime } from "@/utils";
 
-type ActivityType = "login" | "create" | "edit" | "delete" | "system";
+type FilterType =
+  | "ALL"
+  | "User"
+  | "Activity"
+  | "Admin"
+  | "LOGIN"
+  | "USER_DELETED";
 
-interface Activity {
-  id: string;
-  type: ActivityType;
-  actor: string;
-  message: string;
-  time: string;
+const FILTERS: { value: FilterType; label: string; entity?: string; action?: string }[] = [
+  { value: "ALL", label: "Todos" },
+  { value: "User", label: "Usuários", entity: "User" },
+  { value: "Activity", label: "Atividades", entity: "Activity" },
+  { value: "Admin", label: "Perfil & Segurança", entity: "Admin" },
+  { value: "LOGIN", label: "Acessos / Logins", action: "LOGIN" },
+  { value: "USER_DELETED", label: "Exclusões", action: "USER_DELETED" },
+];
+
+function getActionMeta(action: string) {
+  switch (action) {
+    case "USER_CREATED":
+      return {
+        label: "Criação de Usuário",
+        icon: UserPlus,
+        colorClass: "bg-green-50 text-green-600 dark:bg-green-500/15 dark:text-green-400",
+      };
+    case "USER_UPDATED":
+      return {
+        label: "Edição de Usuário",
+        icon: UserRoundCog,
+        colorClass: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400",
+      };
+    case "USER_STATUS_CHANGED":
+      return {
+        label: "Alteração de Status",
+        icon: UserCheck,
+        colorClass: "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
+      };
+    case "USER_DELETED":
+      return {
+        label: "Exclusão de Usuário",
+        icon: Trash2,
+        colorClass: "bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400",
+      };
+    case "ACTIVITY_CREATED":
+      return {
+        label: "Nova Atividade",
+        icon: CalendarDays,
+        colorClass: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
+      };
+    case "ACTIVITY_UPDATED":
+    case "ACTIVITY_STATUS_CHANGED":
+      return {
+        label: "Atividade Atualizada",
+        icon: CalendarDays,
+        colorClass: "bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400",
+      };
+    case "ACTIVITY_DELETED":
+      return {
+        label: "Atividade Excluída",
+        icon: Trash2,
+        colorClass: "bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400",
+      };
+    case "LOGIN":
+      return {
+        label: "Autenticação",
+        icon: LogIn,
+        colorClass: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400",
+      };
+    case "PASSWORD_CHANGED":
+      return {
+        label: "Alteração de Senha",
+        icon: KeyRound,
+        colorClass: "bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400",
+      };
+    case "PROFILE_UPDATED":
+      return {
+        label: "Perfil Atualizado",
+        icon: ShieldCheck,
+        colorClass: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
+      };
+    default:
+      return {
+        label: "Sistema",
+        icon: ShieldCheck,
+        colorClass: "bg-slate-100 text-slate-600 dark:bg-dark-800 dark:text-slate-400",
+      };
+  }
 }
 
-const ACTIVITIES: Activity[] = [
-  {
-    id: "a1",
-    type: "login",
-    actor: "Admin",
-    message: "Entrou na plataforma",
-    time: "agora",
-  },
-  {
-    id: "a2",
-    type: "create",
-    actor: "Lettícia Sabino",
-    message: "Criou o usuário @mariana.lima",
-    time: "há 5 min",
-  },
-  {
-    id: "a3",
-    type: "edit",
-    actor: "Lettícia Sabino",
-    message: "Atualizou o perfil de @carlos.edu",
-    time: "há 32 min",
-  },
-  {
-    id: "a4",
-    type: "system",
-    actor: "Sistema",
-    message: "Backup automático concluído",
-    time: "há 1 h",
-  },
-  {
-    id: "a5",
-    type: "login",
-    actor: "João Pedro",
-    message: "Tentativa de login falhou (2x)",
-    time: "há 2 h",
-  },
-  {
-    id: "a6",
-    type: "delete",
-    actor: "Admin",
-    message: "Removeu o usuário @usuarioteste",
-    time: "há 3 h",
-  },
-  {
-    id: "a7",
-    type: "edit",
-    actor: "Ana Beatriz",
-    message: "Alterou a senha da própria conta",
-    time: "há 5 h",
-  },
-  {
-    id: "a8",
-    type: "create",
-    actor: "Admin",
-    message: "Criou o usuário @rafael.silva",
-    time: "ontem",
-  },
-  {
-    id: "a9",
-    type: "system",
-    actor: "Sistema",
-    message: "Certificado SSL renovado",
-    time: "ontem",
-  },
-  {
-    id: "a10",
-    type: "login",
-    actor: "Admin",
-    message: "Entrou na plataforma",
-    time: "ontem",
-  },
-];
-
-type Filter = "ALL" | ActivityType;
-
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: "ALL", label: "Todos" },
-  { value: "login", label: "Logins" },
-  { value: "create", label: "Criações" },
-  { value: "edit", label: "Edições" },
-  { value: "delete", label: "Exclusões" },
-  { value: "system", label: "Sistema" },
-];
-
-const TYPE_META: Record<
-  ActivityType,
-  { label: string; icon: typeof LogIn; iconClassName: string }
-> = {
-  login: {
-    label: "Login",
-    icon: LogIn,
-    iconClassName: "bg-brand-50 text-brand-600",
-  },
-  create: {
-    label: "Criação",
-    icon: UserPlus,
-    iconClassName: "bg-green-50 text-green-600",
-  },
-  edit: {
-    label: "Edição",
-    icon: UserRoundCog,
-    iconClassName: "bg-amber-50 text-amber-600",
-  },
-  delete: {
-    label: "Exclusão",
-    icon: Trash2,
-    iconClassName: "bg-red-50 text-red-600",
-  },
-  system: {
-    label: "Sistema",
-    icon: ShieldCheck,
-    iconClassName: "bg-purple-50 text-purple-600",
-  },
-};
-
 export function Historico() {
-  const [filter, setFilter] = useState<Filter>("ALL");
-  const filtered =
-    filter === "ALL"
-      ? ACTIVITIES
-      : ACTIVITIES.filter((activity) => activity.type === filter);
+  const [filter, setFilter] = useState<FilterType>("ALL");
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      setLoading(true);
+      const selectedFilter = FILTERS.find((f) => f.value === filter);
+      const res = await logService.findAll({
+        entity: selectedFilter?.entity,
+        action: selectedFilter?.action,
+        limit: 50,
+      });
+      setLogs(res.data);
+      setTotalItems(res.pagination.totalItems);
+    } catch {
+      toast.error("Erro ao carregar registros de auditoria");
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold uppercase tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-          Histórico
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Registro de atividades recentes realizadas na plataforma.
-        </p>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold uppercase tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+            Histórico de Auditoria
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Registro real de ações e eventos realizados no sistema.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => fetchLogs()}
+          disabled={loading}
+          className="self-start sm:self-auto"
+        >
+          <RefreshCw className={cn("h-4 w-4 mr-1.5", loading && "animate-spin")} />
+          Atualizar
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -171,43 +179,72 @@ export function Historico() {
       </div>
 
       <Card className="divide-y divide-slate-100 p-2 dark:divide-dark-800">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : logs.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-12 text-center">
             <FileClock className="h-10 w-10 text-slate-300 dark:text-slate-600" />
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              Nenhuma atividade encontrada
+              Nenhum registro de auditoria encontrado
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Tente selecionar outro filtro.
+              {filter !== "ALL"
+                ? "Tente selecionar outro filtro ou limpar a seleção."
+                : "Realize ações no sistema para visualizar o histórico de eventos."}
             </p>
+            {filter !== "ALL" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFilter("ALL")}
+              >
+                Ver todos os registros
+              </Button>
+            )}
           </div>
         ) : (
-          filtered.map((activity) => {
-            const meta = TYPE_META[activity.type];
+          logs.map((log) => {
+            const meta = getActionMeta(log.action);
             const Icon = meta.icon;
+
             return (
               <div
-                key={activity.id}
+                key={log.id}
                 className="flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-slate-50 dark:hover:bg-dark-800/60"
               >
                 <span
                   className={cn(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                    meta.iconClassName,
+                    meta.colorClass,
                   )}
                 >
                   <Icon className="h-4 w-4" />
                 </span>
+
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-slate-900 dark:text-slate-100">
-                    <span className="font-medium">{activity.actor}</span>{" "}
-                    {activity.message}
+                    <span className="font-semibold text-brand-700 dark:text-brand-400">
+                      {log.actor}
+                    </span>{" "}
+                    {log.description}
                   </p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
-                    {activity.time}
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    {formatDateTime(log.createdAt)} ({formatRelativeTime(log.createdAt)})
                   </p>
                 </div>
-                <span className="hidden shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:bg-dark-800 dark:text-slate-400 sm:inline">
+
+                <span className="hidden shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-dark-800 dark:text-slate-400 sm:inline">
                   {meta.label}
                 </span>
               </div>
@@ -218,7 +255,7 @@ export function Historico() {
 
       <p className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
         <UsersIcon className="h-3.5 w-3.5" />
-        Exibindo {filtered.length} de {ACTIVITIES.length} atividades recentes
+        Exibindo {logs.length} de {totalItems} registros registrados no banco de dados
       </p>
     </div>
   );
